@@ -1,0 +1,13 @@
+faiss-cpu
+numpy
+langchain-openai
+langchain
+PyMuPDF
+pdfplumber
+fastapi
+uvicorn
+openai
+tiktoken
+langchain-community
+langchain
+pypdf
