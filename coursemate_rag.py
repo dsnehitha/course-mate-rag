@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
+import time
 
 # FastAPI App
 app = FastAPI()
@@ -51,6 +52,8 @@ def is_faiss_outdated():
 def build_faiss_index():
     global index, chunks
 
+    start_time = time.time()
+
     if not is_faiss_outdated():
         print("FAISS is up-to-date. No rebuild needed.")
         return
@@ -93,15 +96,23 @@ def build_faiss_index():
 
     print("FAISS Index Built!")
 
+    end_time = time.time()
+    print(f"FAISS Index Built in {end_time - start_time:.2f} seconds")
+
 # Load FAISS Index
 def load_faiss_index():
     global index, chunks
+
+    start_time = time.time()
 
     if index is None or chunks is None:
         # Loading FAISS index into memory
         index = faiss.read_index(f"{DB_PATH}/faiss.index")
         with open(f"{DB_PATH}/chunks.pkl", "rb") as f:
             chunks = pickle.load(f)
+    
+    end_time = time.time()
+    print(f"FAISS Index Loaded in {end_time - start_time:.2f} seconds")
 
 # Retrieve Relevant Chunks
 def retrieve_top_chunks(query, k=3):
