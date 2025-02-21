@@ -4,12 +4,15 @@ import faiss
 import pickle
 import hashlib
 import numpy as np
-from openai import OpenAI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
+from ollama import Client
 
-client = OpenAI()
+client = Client(
+  host='http://localhost:11434',
+  headers={'x-some-header': 'some-value'}
+)
 
 # Path to store FAISS index
 PDF_PATH = "./course_materials/"
@@ -56,13 +59,6 @@ def build_faiss_index():
         return
 
     print("Building FAISS index...")
-
-    # loader = PyPDFLoader(
-    #     PDF_PATH,
-    #     # glob="**/[!.]*.pdf",
-    #     # images_inner_format="markdown-img",
-    #     # images_parser=LLMImageBlobParser(model=ChatOpenAI(model="gpt-4o", max_tokens=1024)),
-    # )
 
     loader = DirectoryLoader(PDF_PATH, glob="*.pdf", loader_cls=PyPDFLoader)
 
@@ -123,17 +119,16 @@ def retrieve_top_chunks(query, k=3):
 
     return " ".join([chunks[i].page_content for i in indices[0] if i < len(chunks)])
 
-# Generate Answer with GPT
+# Generate Answer with llama3.2
 def generate_answer(query):
     context = retrieve_top_chunks(query)
     prompt = f"Use the provided course material to answer:\n\nContext:\n{context}\n\nQuestion: {query}\n\nAnswer:"
 
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "system", "content": "You are a helpful course assistant."},
-                  {"role": "user", "content": prompt}])
+    response = client.chat(model='llama3.2',  messages=[
+        {"role": "system", "content": "You are a helpful course assistant."},
+        {"role": "user", "content": prompt}])
     
-    return response.choices[0].message.content
+    return response.message.content
 
 # Main function to handle command-line queries
 def main():
