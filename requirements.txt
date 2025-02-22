@@ -11,3 +11,4 @@ tiktoken
 langchain-community
 langchain
 pypdf
+ollama

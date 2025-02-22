@@ -9,7 +9,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 
-client = OpenAI()
+client = OpenAI(openai_api_key="skprojOYIhCzFUxwcdRriklqje6l0a7SG7Gp5wVBgv2ArQuDxzzdgopGWnmW4yEDpdyQloOQ8hBuNQHhT3BlbkFJTKMHHLl0QR9DPTSeRpmNqrTxRAJmstw8hgycokxxLfVG2RYVxjLK3Wfp7xNAcUTm9-aK70EEA")
 
 # Path to store FAISS index
 PDF_PATH = "./course_materials/"
@@ -56,13 +56,6 @@ def build_faiss_index():
         return
 
     print("Building FAISS index...")
-
-    # loader = PyPDFLoader(
-    #     PDF_PATH,
-    #     # glob="**/[!.]*.pdf",
-    #     # images_inner_format="markdown-img",
-    #     # images_parser=LLMImageBlobParser(model=ChatOpenAI(model="gpt-4o", max_tokens=1024)),
-    # )
 
     loader = DirectoryLoader(PDF_PATH, glob="*.pdf", loader_cls=PyPDFLoader)
 
@@ -139,12 +132,16 @@ def generate_answer(query):
 def main():
     # Build FAISS Index
     build_faiss_index()
-        
+    
+    start_time = time.time()
     query = input("Enter your question: ").strip()
 
     # Get Answer
     answer = generate_answer(query)
     print(f"\nAnswer:\n{answer}")
+
+    end_time = time.time()
+    print(f"Question answered in {end_time - start_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()

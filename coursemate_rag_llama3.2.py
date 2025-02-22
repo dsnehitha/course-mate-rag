@@ -4,10 +4,14 @@ import faiss
 import pickle
 import hashlib
 import numpy as np
+import torch
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 from ollama import Client
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+
+gpu_res = faiss.StandardGpuResources()
 
 client = Client(
   host='http://localhost:11434',
@@ -47,6 +51,16 @@ def is_faiss_outdated():
     
     except Exception as e:
         return True
+    
+def process_document(doc):
+    """Splits a single document into text chunks."""
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
+    return text_splitter.split_documents([doc])
+
+# **Parallelized Function to Generate Embeddings**
+def generate_embedding(text):
+    """Generates embeddings for a given text chunk."""
+    return np.array(embedding_model.embed_query(text), dtype=np.float32)
 
 # Load Course Materials & Create FAISS Index
 def build_faiss_index():
@@ -61,26 +75,49 @@ def build_faiss_index():
     print("Building FAISS index...")
 
     loader = DirectoryLoader(PDF_PATH, glob="*.pdf", loader_cls=PyPDFLoader)
-
     documents = loader.load()
 
     # Split Text into Chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
-    chunks = text_splitter.split_documents(documents)
+    with ThreadPoolExecutor() as executor:
+        chunk_lists = list(executor.map(process_document, documents))
 
-    # Generate Embeddings
-    vectors = [embedding_model.embed_query(chunk.page_content) for chunk in chunks]
+    chunks = [chunk for sublist in chunk_lists for chunk in sublist]
+    texts = [chunk.page_content for chunk in chunks]
+
+    print(f"{len(chunks)} text chunks extracted.")
+
+    with ProcessPoolExecutor() as executor:
+        vectors = list(executor.map(generate_embedding, texts))
+
+    # text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
+    # chunks = text_splitter.split_documents(documents)
+
+    # # Generate Embeddings
+    # vectors = [embedding_model.embed_query(chunk.page_content) for chunk in chunks]
 
     vectors = np.array(vectors).astype("float32")
 
+    print(f"Embeddings generated for {len(vectors)} chunks.")
+
     # Create FAISS Index
     d = vectors.shape[1]
-    index = faiss.IndexFlatL2(d)
-    index.add(vectors)
+    num_clusters = min(4096, len(vectors) // 39)
+
+    index_cpu = faiss.IndexFlatL2(d)  # Base index
+    index = faiss.index_cpu_to_gpu(gpu_res, 0, index_cpu)
+
+    # Create IVF Index
+    quantizer = faiss.IndexFlatL2(d)
+    ivf_index = faiss.IndexIVFFlat(quantizer, d, num_clusters, faiss.METRIC_L2)
+    ivf_index = faiss.index_cpu_to_gpu(gpu_res, 0, ivf_index)
+    ivf_index.train(vectors)
+    ivf_index.add(vectors)
+
+    print(f"FAISS Index trained with {num_clusters} clusters.")
 
     # Save Index
     os.makedirs(DB_PATH, exist_ok=True)
-    faiss.write_index(index, f"{DB_PATH}/faiss.index")
+    faiss.write_index(faiss.index_gpu_to_cpu(ivf_index), f"{DB_PATH}/faiss.index")
     with open(f"{DB_PATH}/chunks.pkl", "wb") as f:
         pickle.dump(chunks, f)
 
@@ -90,7 +127,7 @@ def build_faiss_index():
     print("FAISS Index Built!")
 
     end_time = time.time()
-    print(f"FAISS Index Built in {end_time - start_time:.2f} seconds")
+    print(f"FAISS Index Built in {end_time - start_time:.2f} seconds (GPU Accelerated)")
 
 # Load FAISS Index
 def load_faiss_index():
@@ -134,12 +171,17 @@ def generate_answer(query):
 def main():
     # Build FAISS Index
     build_faiss_index()
-        
+    
+    start_time = time.time()
     query = input("Enter your question: ").strip()
 
     # Get Answer
     answer = generate_answer(query)
     print(f"\nAnswer:\n{answer}")
+
+    end_time = time.time()
+    print(f"Question answered in {end_time - start_time:.2f} seconds (GPU Accelerated)")
+
 
 if __name__ == "__main__":
     main()
