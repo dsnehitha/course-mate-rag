@@ -6,7 +6,7 @@ import hashlib
 import numpy as np
 import torch
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 from ollama import Client
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
@@ -25,7 +25,7 @@ METADATA_FILE = f"{DB_PATH}/metadata.pkl"
 
 index = None
 chunks = None
-embedding_model = OpenAIEmbeddings(openai_api_key="")
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": device})
 
 # Function to compute a hash (fingerprint) of all PDFs
 def compute_pdf_hash():
@@ -169,7 +169,7 @@ def main():
     # Build FAISS Index
     build_faiss_index()
     
-    query = input("Enter your question: ").strip()
+    query = input("\nEnter your question: ").strip()
 
     start_time = time.time()
     # Get Answer
@@ -177,7 +177,7 @@ def main():
     print(f"\nAnswer:\n{answer}")
 
     end_time = time.time()
-    print(f"Question answered in {end_time - start_time:.2f} seconds (GPU Accelerated)")
+    print(f"\nQuestion answered in {end_time - start_time:.2f} seconds (GPU Accelerated)")
 
 
 if __name__ == "__main__":
