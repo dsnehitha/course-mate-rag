@@ -11,7 +11,7 @@ from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 from ollama import Client
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
-gpu_res = faiss.StandardGpuResources()
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 client = Client(
   host='http://localhost:11434',
@@ -25,7 +25,7 @@ METADATA_FILE = f"{DB_PATH}/metadata.pkl"
 
 index = None
 chunks = None
-embedding_model = OpenAIEmbeddings()
+embedding_model = OpenAIEmbeddings(openai_api_key="")
 
 # Function to compute a hash (fingerprint) of all PDFs
 def compute_pdf_hash():
@@ -60,7 +60,9 @@ def process_document(doc):
 # **Parallelized Function to Generate Embeddings**
 def generate_embedding(text):
     """Generates embeddings for a given text chunk."""
-    return np.array(embedding_model.embed_query(text), dtype=np.float32)
+    embedding = np.array(embedding_model.embed_query(text), dtype=np.float32)
+    # return torch.tensor(embedding, device=device)
+    return embedding
 
 # Load Course Materials & Create FAISS Index
 def build_faiss_index():
@@ -82,42 +84,36 @@ def build_faiss_index():
         chunk_lists = list(executor.map(process_document, documents))
 
     chunks = [chunk for sublist in chunk_lists for chunk in sublist]
+
+    # text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
+    # chunks = text_splitter.split_documents(documents)
+    
     texts = [chunk.page_content for chunk in chunks]
 
     print(f"{len(chunks)} text chunks extracted.")
 
     with ProcessPoolExecutor() as executor:
         vectors = list(executor.map(generate_embedding, texts))
-
-    # text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
-    # chunks = text_splitter.split_documents(documents)
+    # vectors = [generate_embedding(text) for text in texts]
+    vectors = np.array(vectors).astype("float32")
 
     # # Generate Embeddings
     # vectors = [embedding_model.embed_query(chunk.page_content) for chunk in chunks]
 
-    vectors = np.array(vectors).astype("float32")
+    # vectors = torch.stack(vectors).cpu().numpy()
 
     print(f"Embeddings generated for {len(vectors)} chunks.")
 
     # Create FAISS Index
     d = vectors.shape[1]
-    num_clusters = min(4096, len(vectors) // 39)
+    index = faiss.IndexFlatL2(d)
+    index.add(vectors)
 
-    index_cpu = faiss.IndexFlatL2(d)  # Base index
-    index = faiss.index_cpu_to_gpu(gpu_res, 0, index_cpu)
-
-    # Create IVF Index
-    quantizer = faiss.IndexFlatL2(d)
-    ivf_index = faiss.IndexIVFFlat(quantizer, d, num_clusters, faiss.METRIC_L2)
-    ivf_index = faiss.index_cpu_to_gpu(gpu_res, 0, ivf_index)
-    ivf_index.train(vectors)
-    ivf_index.add(vectors)
-
-    print(f"FAISS Index trained with {num_clusters} clusters.")
+    print(f"FAISS Index trained with {len(vectors)} clusters.")
 
     # Save Index
     os.makedirs(DB_PATH, exist_ok=True)
-    faiss.write_index(faiss.index_gpu_to_cpu(ivf_index), f"{DB_PATH}/faiss.index")
+    faiss.write_index(index, f"{DB_PATH}/faiss.index")
     with open(f"{DB_PATH}/chunks.pkl", "wb") as f:
         pickle.dump(chunks, f)
 
@@ -159,6 +155,7 @@ def retrieve_top_chunks(query, k=3):
 # Generate Answer with llama3.2
 def generate_answer(query):
     context = retrieve_top_chunks(query)
+    print("\ncontext\n", context)
     prompt = f"Use the provided course material to answer:\n\nContext:\n{context}\n\nQuestion: {query}\n\nAnswer:"
 
     response = client.chat(model='llama3.2',  messages=[
@@ -172,9 +169,9 @@ def main():
     # Build FAISS Index
     build_faiss_index()
     
-    start_time = time.time()
     query = input("Enter your question: ").strip()
 
+    start_time = time.time()
     # Get Answer
     answer = generate_answer(query)
     print(f"\nAnswer:\n{answer}")

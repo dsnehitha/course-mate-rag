@@ -9,7 +9,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 
-client = OpenAI(openai_api_key="skprojOYIhCzFUxwcdRriklqje6l0a7SG7Gp5wVBgv2ArQuDxzzdgopGWnmW4yEDpdyQloOQ8hBuNQHhT3BlbkFJTKMHHLl0QR9DPTSeRpmNqrTxRAJmstw8hgycokxxLfVG2RYVxjLK3Wfp7xNAcUTm9-aK70EEA")
+client = OpenAI(openai_api_key="")
 
 # Path to store FAISS index
 PDF_PATH = "./course_materials/"
