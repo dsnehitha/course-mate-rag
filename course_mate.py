@@ -77,7 +77,7 @@ def build_collection():
     start_time = time.time()
 
     if not is_db_outdated():
-        print("No changes detected in PDFs. Using existing collection.")
+        print("No changes detected in PDFs.")
         return
     
     print("Building collection of documents...")
@@ -97,7 +97,7 @@ def build_collection():
     # chunk_texts = [chunk.page_content for chunk in chunks]
     # chunk_embeddings = embeddings.embed_documents(chunk_texts)
     existing_collections = [col.name for col in q_client.get_collections().collections]
-
+    print(f"Existing collections: {existing_collections}")
     if "student_coursework" not in existing_collections:
         print("Creating collection: student_coursework")
         q_client.create_collection(
@@ -105,14 +105,12 @@ def build_collection():
             vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE)  # Adjust size based on embedding model
         )
     else:
-        print("Collection already exists.")
+        print("Updating collection: student_coursework")
+        q_client.update_collection(
+            collection_name="student_coursework",
+            optimizers_config=models.OptimizersConfigDiff(indexing_threshold=10000),
+        )
 
-    vectore_store = Qdrant(
-        client=q_client,
-        # documents=chunks, 
-        embeddings=embedding_model,
-        collection_name=COLLECTION_NAME,
-    )
     vectore_store.add_documents(chunks)
 
     # Save metadata including the hash of the PDFs
