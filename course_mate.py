@@ -97,7 +97,7 @@ def build_collection():
     # chunk_texts = [chunk.page_content for chunk in chunks]
     # chunk_embeddings = embeddings.embed_documents(chunk_texts)
     existing_collections = [col.name for col in q_client.get_collections().collections]
-    print(f"Existing collections: {existing_collections}")
+    
     if "student_coursework" not in existing_collections:
         print("Creating collection: student_coursework")
         q_client.create_collection(
