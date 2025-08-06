@@ -1,0 +1,1 @@
+# Utility functions for CourseMate RAG Application 
