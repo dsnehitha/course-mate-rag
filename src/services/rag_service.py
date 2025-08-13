@@ -13,6 +13,7 @@ from langchain_core.documents import Document
 
 from src.core.document_processor import DocumentProcessor
 from src.core.image_processor import ImageProcessor
+from src.core.audio_video_processor import AudioVideoProcessor
 from src.core.vector_store import VectorStoreManager
 from src.config.settings import settings
 
@@ -23,16 +24,26 @@ class RAGService:
     def __init__(self):
         self.document_processor = DocumentProcessor()
         self.image_processor = ImageProcessor()
+        self.audio_video_processor = AudioVideoProcessor()
         self.vector_store = VectorStoreManager()
     
     def build_collection(self) -> None:
         """Build the vector collection from documents."""
+        # Check if database needs to be rebuilt
+        if not self.document_processor.is_database_outdated():
+            print("Database is up to date. No need to rebuild.")
+            return
+        
         start_time = time.time()
+        print("Database is outdated. Rebuilding collection...")
         
         # Process documents
         text_splits, image_splits = self.document_processor.process_documents()
         
-        if not text_splits and not image_splits:
+        # Process audio and video files
+        audio_splits, video_splits = self.audio_video_processor.get_processed_files()
+        
+        if not text_splits and not image_splits and not audio_splits and not video_splits:
             print("No documents to process.")
             return
         
@@ -41,17 +52,26 @@ class RAGService:
             image_docs = self.image_processor.generate_image_captions()
             image_splits = self.document_processor.split_documents(image_docs)
         
-        # Create vector store
+        # Split audio and video documents
+        if audio_splits:
+            audio_splits = self.document_processor.split_documents(audio_splits)
+        
+        if video_splits:
+            video_splits = self.document_processor.split_documents(video_splits)
+        
+        # Create vector store (only if needed)
         self.vector_store.create_collection()
         
         # Add documents to vector store
-        all_documents = text_splits + image_splits
+        all_documents = text_splits + image_splits + audio_splits + video_splits
         self.vector_store.add_documents(all_documents)
         
         # Save metadata
         self.document_processor.save_metadata()
         
         print(f"Collection built successfully in {time.time() - start_time:.2f} seconds.")
+        
+        self.print_database_status()
     
     def generate_answer(self, query: str, k: Optional[int] = None) -> Dict:
         """Generate answer for a query using RAG."""
@@ -131,13 +151,11 @@ class RAGService:
                 "error": str(e)
             }
     
-    def get_collection_info(self) -> Dict:
-        """Get information about the current collection."""
-        return self.vector_store.get_collection_info()
     
     def clear_cache(self) -> None:
         """Clear all caches."""
         self.image_processor.clear_cache()
+        self.audio_video_processor.clear_cache()
         print("Cleared all caches.")
     
     def rebuild_collection(self) -> None:
@@ -150,3 +168,52 @@ class RAGService:
         
         # Rebuild
         self.build_collection() 
+    
+    def get_database_status(self) -> Dict:
+        """Get detailed information about the current database status."""
+        status = {
+            "database_outdated": self.document_processor.is_database_outdated(),
+            "collection_exists": False,
+            "collection_info": {},
+            "metadata_file_exists": self.document_processor.metadata_file.exists(),
+            "content_hashes": {}
+        }
+        
+        # Check if collection exists in Qdrant
+        try:
+            collection_info = self.vector_store.get_collection_info()
+            status["collection_exists"] = bool(collection_info)
+            status["collection_info"] = collection_info
+        except Exception as e: 
+            status["collection_info"] = {"error": str(e)}
+        
+        # Get content hashes if metadata exists
+        if status["metadata_file_exists"]:
+            try:
+                import pickle
+                with open(self.document_processor.metadata_file, 'rb') as f:
+                    metadata = pickle.load(f)
+                status["content_hashes"] = {
+                    "pdf_hash": metadata.get("pdf_hash", "Not found"),
+                    "audio_video_hash": metadata.get("audio_video_hash", "Not found")
+                }
+            except Exception as e:
+                status["content_hashes"] = {"error": str(e)}
+        
+        return status
+    
+    def print_database_status(self) -> None:
+        """Print a human-readable database status."""
+        status = self.get_database_status()
+        
+        print("\n=== Database Status ===")
+        print(f"Database outdated: {'Yes' if status['database_outdated'] else 'No'}")
+        print(f"Collection exists: {'Yes' if status['collection_exists'] else 'No'}")
+        print(f"Metadata file exists: {'Yes' if status['metadata_file_exists'] else 'No'}")
+        
+        if status["database_outdated"]:
+            print("\n⚠️  Database needs to be rebuilt!")
+        else:
+            print("\n✅ Database is up to date!")
+        
+        print("======================\n") 

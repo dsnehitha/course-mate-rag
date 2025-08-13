@@ -5,7 +5,8 @@ course_materials/
 qdrant_storage/
 metadata.pkl
 /extracted_images
-/extracted_images_2
+/extracted_audio
+/extracted_transcripts
 /course_materials
 /qdrant_storage
 /.DS_Store

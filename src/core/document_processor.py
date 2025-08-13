@@ -48,19 +48,86 @@ class DocumentProcessor:
         return hasher.hexdigest()
     
     def is_database_outdated(self) -> bool:
-        """Check if the database needs to be rebuilt based on PDF changes."""
+        """Check if the database needs to be rebuilt based on content changes."""
+        # Always check if metadata file exists
         if not self.metadata_file.exists():
+            return True
+        
+        # Check if Qdrant collection exists
+        try:
+            from qdrant_client import QdrantClient
+            from src.config.settings import settings
+            
+            client = QdrantClient(
+                url=settings.database.qdrant_url,
+                check_compatibility=False  # Suppress version compatibility warnings
+            )
+            existing_collections = [
+                col.name for col in client.get_collections().collections
+            ]
+            
+            if settings.database.collection_name not in existing_collections:
+                print("Qdrant collection doesn't exist. Database needs to be rebuilt.")
+                return True
+                
+        except Exception as e:
+            print(f"Error checking Qdrant collection: {e}")
             return True
         
         try:
             with open(self.metadata_file, 'rb') as f:
-                saved_hash = pickle.load(f).get("pdf_hash", None)
+                saved_metadata = pickle.load(f)
             
-            current_hash = self.compute_pdf_hash()
-            return saved_hash != current_hash
+            # Check PDF hash
+            saved_pdf_hash = saved_metadata.get("pdf_hash", None)
+            current_pdf_hash = self.compute_pdf_hash()
+            
+            if saved_pdf_hash != current_pdf_hash:
+                print("PDF content has changed. Database needs to be rebuilt.")
+                return True
+            
+            # Check if we have audio/video tracking (for backward compatibility)
+            if "audio_video_hash" not in saved_metadata:
+                print("Audio/video tracking not found in metadata. Database needs to be rebuilt.")
+                return True
+            
+            # Check audio/video hash
+            saved_av_hash = saved_metadata.get("audio_video_hash", None)
+            current_av_hash = self.compute_audio_video_hash()
+            
+            if saved_av_hash != current_av_hash:
+                print("Audio/video content has changed. Database needs to be rebuilt.")
+                return True
+            
+            print("Database is up to date. No need to rebuild.")
+            return False
+            
         except Exception as e:
             print(f"Error checking database status: {e}")
             return True
+    
+    def compute_audio_video_hash(self) -> str:
+        """Compute hash of all audio and video files in the data directory."""
+        hasher = hashlib.sha256()
+        audio_video_files = []
+        
+        # Get supported audio/video formats
+        audio_formats = ['.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg']
+        video_formats = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+        supported_formats = audio_formats + video_formats
+        
+        for file_path in self.data_dir.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in supported_formats:
+                audio_video_files.append(file_path)
+        
+        # Sort files for consistent hashing
+        audio_video_files.sort(key=lambda x: x.name)
+        
+        for file_path in audio_video_files:
+            with open(file_path, 'rb') as f:
+                hasher.update(f.read())
+        
+        return hasher.hexdigest()
     
     def extract_images_from_pdfs(self) -> None:
         """Extract text and images from all PDF files."""
@@ -121,19 +188,7 @@ class DocumentProcessor:
         
         # Create image documents (these will be populated with captions later)
         image_docs = []
-        for img in self.image_data:
-            img_name = img['name']
-            page_match = re.search(r'page_(\d+)_img', img_name)
-            page_num = int(page_match.group(1)) if page_match else None
-            
-            image_docs.append(Document(
-                page_content=img['response'],
-                metadata={
-                    "page": page_num, 
-                    "image_name": img_name,
-                    "type": "image"
-                }
-            ))
+        
         
         return text_docs, image_docs
     
@@ -146,16 +201,16 @@ class DocumentProcessor:
         return text_splitter.split_documents(documents)
     
     def save_metadata(self) -> None:
-        """Save metadata including PDF hash for change detection."""
-        metadata = {"pdf_hash": self.compute_pdf_hash()}
+        """Save metadata including PDF and audio/video hashes for change detection."""
+        metadata = {
+            "pdf_hash": self.compute_pdf_hash(),
+            "audio_video_hash": self.compute_audio_video_hash()
+        }
         with open(self.metadata_file, 'wb') as f:
             pickle.dump(metadata, f)
     
     def process_documents(self) -> Tuple[List[Document], List[Document]]:
         """Main method to process all documents."""
-        if not self.is_database_outdated():
-            print("Database is up to date. No need to rebuild.")
-            return [], []
         
         self.extract_images_from_pdfs()
         text_docs, image_docs = self.create_documents()

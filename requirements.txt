@@ -18,6 +18,12 @@ PyMuPDF>=1.23.0
 Pillow>=10.0.0
 pypdf>=3.17.0
 
+# Audio and video processing
+openai-whisper>=20231117
+librosa>=0.10.0
+opencv-python>=4.8.0
+ffmpeg-python>=0.2.0
+
 # LLM integration
 ollama>=0.1.0
 

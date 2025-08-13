@@ -44,6 +44,8 @@ class ProcessingConfig:
     similarity_search_k: int = 5
     data_dir: str = "./course_materials"
     image_dir: str = "./extracted_images"
+    audio_dir: str = "./extracted_audio"
+    transcript_dir: str = "./extracted_transcripts"
     metadata_dir: str = "./course_materials/metadata"
 
 

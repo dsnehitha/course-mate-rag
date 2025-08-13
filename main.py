@@ -11,10 +11,11 @@ def main():
     """Main CLI function."""
     logger.info("Starting CourseMate RAG Application...")
     
-    # Initialize RAG service
     rag_service = RAGService()
     
-    # Build collection
+    rag_service.print_database_status()
+    
+    # Build collection (only if needed)
     logger.info("Building collection...")
     rag_service.build_collection()
     

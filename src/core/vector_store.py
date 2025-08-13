@@ -19,7 +19,8 @@ class VectorStoreManager:
     def __init__(self):
         self.client = QdrantClient(
             url=settings.database.qdrant_url, 
-            prefer_grpc=False
+            prefer_grpc=False,
+            check_compatibility=False  # Suppress version compatibility warnings
         )
         
         self.embedding_model = HuggingFaceEmbeddings(
@@ -83,13 +84,29 @@ class VectorStoreManager:
     def get_collection_info(self) -> dict:
         """Get information about the current collection."""
         try:
+            # Check if collection exists first
+            existing_collections = [
+                col.name for col in self.client.get_collections().collections
+            ]
+            
+            if settings.database.collection_name not in existing_collections:
+                return {"error": "Collection does not exist"}
+            
             collection_info = self.client.get_collection(settings.database.collection_name)
+            
+            try:
+                info_dict = collection_info.model_dump()
+            except AttributeError:
+                info_dict = collection_info.dict()
+            
             return {
-                "name": collection_info.name,
-                "vectors_count": collection_info.vectors_count,
-                "points_count": collection_info.points_count,
-                "status": collection_info.status
+                "name": settings.database.collection_name,  # Use the collection name from settings
+                "vectors_count": info_dict.get("vectors_count", 0),
+                "indexed_vectors_count": info_dict.get("indexed_vectors_count", 0),
+                "points_count": info_dict.get("points_count", 0),
+                "status": str(info_dict.get("status", "Unknown")),
+                "segments_count": info_dict.get("segments_count", 0)
             }
         except Exception as e:
             print(f"Error getting collection info: {e}")
-            return {} 
+            return {"error": str(e)} 
