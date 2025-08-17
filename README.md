@@ -66,10 +66,25 @@ course-mate-rag/
    ollama pull llama3.2-vision
    ```
 
-5. **Start Qdrant** (vector database):
+5. **Windows Users - Install FFmpeg** (for video processing):
+   ```bash
+   # Option 1: Using Chocolatey (recommended)
+   choco install ffmpeg
+   
+   # Option 2: Using winget
+   winget install ffmpeg
+   
+   # Option 3: Manual installation
+   # Download from https://ffmpeg.org/download.html
+   # Extract to C:\ffmpeg and add C:\ffmpeg\bin to PATH
+   ```
+
+6. **Start Qdrant** (vector database):
    ```bash
    # Using Docker
-   docker run -p 6333:6333 qdrant/qdrant
+   
+   docker volume create qdrant_storage
+   docker run -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/storage qdrant/qdrant
    
    # Or install locally
    # Follow instructions at https://qdrant.tech/documentation/guides/installation/
