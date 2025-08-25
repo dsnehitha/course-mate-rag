@@ -19,15 +19,14 @@ from src.config.settings import settings
 class AudioVideoProcessor:
     """Handles audio and video processing including transcription and metadata extraction."""
     
-    def __init__(self):
-        self.data_dir = Path(settings.processing.data_dir)
-        self.audio_dir = Path(settings.processing.audio_dir)
-        self.transcript_dir = Path(settings.processing.transcript_dir)
+    def __init__(self, settings=None):
+        self.settings = settings
+        self.data_dir = Path(self.settings.processing.data_dir)
+        self.audio_dir = Path(self.settings.processing.audio_dir)
+        self.transcript_dir = Path(self.settings.processing.transcript_dir)
         
-        # Ensure directories exist
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.transcript_dir.mkdir(parents=True, exist_ok=True)
-        
         self.audio_data = []
         self.video_data = []
         self.transcript_data = []

@@ -23,16 +23,15 @@ from src.config.settings import settings
 class DocumentProcessor:
     """Handles document processing including PDF extraction and image processing."""
     
-    def __init__(self):
-        self.data_dir = Path(settings.processing.data_dir)
-        self.image_dir = Path(settings.processing.image_dir)
-        self.metadata_dir = Path(settings.processing.metadata_dir)
+    def __init__(self, settings=None):
+        self.settings = settings
+        self.data_dir = Path(self.settings.processing.data_dir)
+        self.image_dir = Path(self.settings.processing.image_dir)
+        self.metadata_dir = Path(self.settings.processing.metadata_dir)
         self.metadata_file = self.metadata_dir / "metadata.pkl"
         
-        # Ensure directories exist
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
         self.image_dir.mkdir(parents=True, exist_ok=True)
-        
         self.text_data = []
         self.image_data = []
     

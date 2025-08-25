@@ -21,9 +21,10 @@ from src.config.settings import settings
 class ImageProcessor:
     """Handles image processing and captioning."""
     
-    def __init__(self):
-        self.image_dir = Path(settings.processing.image_dir)
-        self.metadata_dir = Path(settings.processing.metadata_dir)
+    def __init__(self, settings=None):
+        self.settings = settings
+        self.image_dir = Path(self.settings.processing.image_dir)
+        self.metadata_dir = Path(self.settings.processing.metadata_dir)
         self.captions_file = self.metadata_dir / "captions.pkl"
         self.image_data = []
     
