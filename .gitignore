@@ -10,3 +10,4 @@ metadata.pkl
 /course_materials
 /qdrant_storage
 /.DS_Store
+/results

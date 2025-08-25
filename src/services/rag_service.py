@@ -113,6 +113,21 @@ class RAGService:
         
         clean_context = "\n\n".join(context_blocks)
         
+        system_prompt = f"""
+        You are a helpful and knowledgeable student assistant. 
+        Your job is to carefully answer student queries using the provided lecture or course material as the main source of truth. 
+        Always ground your answers in the given context. If the context does not contain enough information, explicitly say so and avoid making things up. 
+        Provide the answer only without prefixing it with statements such as "Based on the provided context" or "According to the lecture" or "Based on the provided transcript" etc.
+        
+
+        When answering:
+        - Be clear, concise, and accurate. 
+        - Use a structured explanation with definitions, step-by-step reasoning, and examples if applicable. 
+        - Highlight key concepts or formulas from the context that directly support the answer. 
+        - If the question is broad or open-ended, provide a summary first and then expand into details. 
+        - If multiple interpretations are possible, explain them and clarify based on context.
+        """
+        
         # Generate answer using LLM
         prompt = f"Use the provided context to answer the question: {query}\n\nContext:\n{clean_context}\n\nAnswer:"
         
@@ -122,7 +137,7 @@ class RAGService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You're a helpful student assistant trying to answer queries using course material."
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
