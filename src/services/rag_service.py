@@ -8,6 +8,8 @@ import re
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 
+import copy
+
 from ollama import chat
 from langchain_core.documents import Document
 
@@ -21,11 +23,22 @@ from src.config.settings import settings
 class RAGService:
     """Main RAG service that orchestrates all operations."""
     
-    def __init__(self):
-        self.document_processor = DocumentProcessor()
-        self.image_processor = ImageProcessor()
-        self.audio_video_processor = AudioVideoProcessor()
-        self.vector_store = VectorStoreManager()
+    def __init__(self, course_name: str):
+        self.course_name = course_name
+        
+        self.settings = copy.deepcopy(settings)
+        base = f"course_materials/{course_name}"
+        self.settings.processing.data_dir = f"{base}"
+        self.settings.processing.image_dir = f"{base}/extracted_images"
+        self.settings.processing.audio_dir = f"{base}/extracted_audio"
+        self.settings.processing.transcript_dir = f"{base}/extracted_transcripts"
+        self.settings.processing.metadata_dir = f"{base}/metadata"
+        self.settings.database.collection_name = course_name
+        
+        self.document_processor = DocumentProcessor(settings=self.settings)
+        self.image_processor = ImageProcessor(settings=self.settings)
+        self.audio_video_processor = AudioVideoProcessor(settings=self.settings)
+        self.vector_store = VectorStoreManager(settings=self.settings)
     
     def build_collection(self) -> None:
         """Build the vector collection from documents."""
