@@ -16,21 +16,20 @@ from src.config.settings import settings
 class VectorStoreManager:
     """Manages vector store operations with Qdrant."""
     
-    def __init__(self):
+    def __init__(self, settings=None):
+        self.settings = settings
         self.client = QdrantClient(
-            url=settings.database.qdrant_url, 
+            url=self.settings.database.qdrant_url, 
             prefer_grpc=False,
-            check_compatibility=False  # Suppress version compatibility warnings
+            check_compatibility=False
         )
-        
         self.embedding_model = HuggingFaceEmbeddings(
-            model_name=settings.model.embedding_model,
-            model_kwargs={"device": settings.model.device}
+            model_name=self.settings.model.embedding_model,
+            model_kwargs={"device": self.settings.model.device}
         )
-        
         self.vector_store = Qdrant(
             client=self.client,
-            collection_name=settings.database.collection_name,
+            collection_name=self.settings.database.collection_name,
             embeddings=self.embedding_model
         )
     
@@ -40,27 +39,27 @@ class VectorStoreManager:
             col.name for col in self.client.get_collections().collections
         ]
         
-        if settings.database.collection_name not in existing_collections:
+        if self.settings.database.collection_name not in existing_collections:
             self.client.create_collection(
-                collection_name=settings.database.collection_name,
+                collection_name=self.settings.database.collection_name,
                 vectors_config=models.VectorParams(
-                    size=settings.database.vector_size,
-                    distance=getattr(models.Distance, settings.database.distance_metric)
+                    size=self.settings.database.vector_size,
+                    distance=getattr(models.Distance, self.settings.database.distance_metric)
                 ),
                 optimizers_config=models.OptimizersConfigDiff(
-                    indexing_threshold=settings.database.indexing_threshold
+                    indexing_threshold=self.settings.database.indexing_threshold
                 ),
             )
-            print(f"Created collection: {settings.database.collection_name}")
+            print(f"Created collection: {self.settings.database.collection_name}")
         else:
             # Update existing collection
             self.client.update_collection(
-                collection_name=settings.database.collection_name,
+                collection_name=self.settings.database.collection_name,
                 optimizers_config=models.OptimizersConfigDiff(
-                    indexing_threshold=settings.database.indexing_threshold
+                    indexing_threshold=self.settings.database.indexing_threshold
                 ),
             )
-            print(f"Updated collection: {settings.database.collection_name}")
+            print(f"Updated collection: {self.settings.database.collection_name}")
     
     def add_documents(self, documents: List[Document]) -> None:
         """Add documents to the vector store."""
@@ -70,14 +69,14 @@ class VectorStoreManager:
     
     def similarity_search(self, query: str, k: Optional[int] = None) -> List[Document]:
         """Perform similarity search on the vector store."""
-        k = k or settings.processing.similarity_search_k
+        k = k or self.settings.processing.similarity_search_k
         return self.vector_store.similarity_search(query, k=k)
     
     def delete_collection(self) -> None:
         """Delete the vector collection."""
         try:
-            self.client.delete_collection(settings.database.collection_name)
-            print(f"Deleted collection: {settings.database.collection_name}")
+            self.client.delete_collection(self.settings.database.collection_name)
+            print(f"Deleted collection: {self.settings.database.collection_name}")
         except Exception as e:
             print(f"Error deleting collection: {e}")
     
@@ -88,19 +87,15 @@ class VectorStoreManager:
             existing_collections = [
                 col.name for col in self.client.get_collections().collections
             ]
-            
-            if settings.database.collection_name not in existing_collections:
+            if self.settings.database.collection_name not in existing_collections:
                 return {"error": "Collection does not exist"}
-            
-            collection_info = self.client.get_collection(settings.database.collection_name)
-            
+            collection_info = self.client.get_collection(self.settings.database.collection_name)
             try:
                 info_dict = collection_info.model_dump()
             except AttributeError:
                 info_dict = collection_info.dict()
-            
             return {
-                "name": settings.database.collection_name,  # Use the collection name from settings
+                "name": self.settings.database.collection_name,  # Use the collection name from settings
                 "vectors_count": info_dict.get("vectors_count", 0),
                 "indexed_vectors_count": info_dict.get("indexed_vectors_count", 0),
                 "points_count": info_dict.get("points_count", 0),
