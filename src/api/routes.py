@@ -4,6 +4,7 @@ FastAPI routes for CourseMate RAG Application.
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from fastapi import Query as FastAPIQuery
 
 from src.services.rag_service import RAGService
 from src.api.models import (
@@ -15,9 +16,8 @@ from src.config.settings import settings
 # Create router
 router = APIRouter(prefix="/api/v1", tags=["rag"])
 
-# Dependency to get RAG service
-def get_rag_service():
-    return RAGService()
+def get_rag_service(course_name: str = FastAPIQuery(..., description="Course name (matches folder in course_materials)")):
+    return RAGService(course_name=course_name)
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -37,10 +37,11 @@ async def health_check(rag_service: RAGService = Depends(get_rag_service)):
 @router.post("/query", response_model=QueryResponse)
 async def query(
     request: QueryRequest,
-    rag_service: RAGService = Depends(get_rag_service)
+    course_name: str = FastAPIQuery(..., description="Course name (matches folder in course_materials)"),
 ):
     """Process a query and return an answer."""
     try:
+        rag_service = RAGService(course_name=course_name)
         result = rag_service.generate_answer(request.query, request.k)
         return QueryResponse(**result)
     except Exception as e:
