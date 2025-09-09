@@ -12,7 +12,7 @@ import re
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 
-import pymupdf
+import fitz  # PyMuPDF
 from PIL import Image
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -35,15 +35,30 @@ class DocumentProcessor:
         self.text_data = []
         self.image_data = []
     
+    def iter_files_with_exts(self, exts: List[str]) -> List[Path]:
+        """Yield files under data_dir recursively that match extensions."""
+        matched: List[Path] = []
+        exts_lower = {e.lower() for e in exts}
+        for root, _, files in os.walk(self.data_dir):
+            root_path = Path(root)
+            for name in files:
+                p = root_path / name
+                if p.suffix.lower() in exts_lower:
+                    matched.append(p)
+        # Stable ordering for deterministic hashes
+        matched.sort(key=lambda p: str(p.relative_to(self.data_dir)))
+        return matched
+
     def compute_pdf_hash(self) -> str:
-        """Compute hash of all PDF files in the data directory."""
+        """Compute hash of all PDF files in the data directory (recursively)."""
         hasher = hashlib.sha256()
-        pdf_files = sorted([f for f in self.data_dir.iterdir() if f.suffix.lower() == '.pdf'])
-        
+        pdf_files = self.iter_files_with_exts(['.pdf'])
         for pdf in pdf_files:
+            # Include relative path to detect file adds/removes/renames deterministically
+            rel = str(pdf.relative_to(self.data_dir)).encode('utf-8')
+            hasher.update(rel)
             with open(pdf, 'rb') as f:
                 hasher.update(f.read())
-        
         return hasher.hexdigest()
     
     def is_database_outdated(self) -> bool:
@@ -106,26 +121,17 @@ class DocumentProcessor:
             return True
     
     def compute_audio_video_hash(self) -> str:
-        """Compute hash of all audio and video files in the data directory."""
+        """Compute hash of all audio and video files in the data directory (recursively)."""
         hasher = hashlib.sha256()
-        audio_video_files = []
-        
-        # Get supported audio/video formats
         audio_formats = ['.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg']
         video_formats = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
-        supported_formats = audio_formats + video_formats
-        
-        for file_path in self.data_dir.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() in supported_formats:
-                audio_video_files.append(file_path)
-        
-        # Sort files for consistent hashing
-        audio_video_files.sort(key=lambda x: x.name)
-        
-        for file_path in audio_video_files:
+        supported = audio_formats + video_formats
+        files = self.iter_files_with_exts(supported)
+        for file_path in files:
+            rel = str(file_path.relative_to(self.data_dir)).encode('utf-8')
+            hasher.update(rel)
             with open(file_path, 'rb') as f:
                 hasher.update(f.read())
-        
         return hasher.hexdigest()
     
     def extract_images_from_pdfs(self) -> None:
@@ -133,13 +139,13 @@ class DocumentProcessor:
         self.text_data = []
         self.image_data = []
         
-        for file_path in self.data_dir.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() == '.pdf':
-                print(f"\nExtracting images from {file_path.name}...")
+        for file_path in self.iter_files_with_exts(['.pdf']):
+            if file_path.is_file():
+                print(f"\nExtracting images from {file_path.relative_to(self.data_dir)}...")
                 
                 start_time = time.time()
                 
-                with pymupdf.open(str(file_path)) as doc:
+                with fitz.open(str(file_path)) as doc:
                     for page_num in range(len(doc)):
                         page = doc[page_num]
                         
@@ -148,7 +154,7 @@ class DocumentProcessor:
                         self.text_data.append({
                             "response": text, 
                             "name": page_num + 1,
-                            "source_file": file_path.name
+                            "source_file": str(file_path.relative_to(self.data_dir))
                         })
                         
                         # Extract images
