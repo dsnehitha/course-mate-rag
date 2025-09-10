@@ -126,23 +126,51 @@ class RAGService:
         
         clean_context = "\n\n".join(context_blocks)
         
-        system_prompt = f"""
-        You are a helpful and knowledgeable student assistant. 
-        Your job is to carefully answer student queries using the provided lecture or course material as the main source of truth. 
-        Always ground your answers in the given context. If the context does not contain enough information, explicitly say so and avoid making things up. 
-        Provide the answer only without prefixing it with statements such as "Based on the provided context" or "According to the lecture" or "Based on the provided transcript" etc.
+        # system_prompt = f"""
+        # You are a helpful and knowledgeable student assistant. 
+        # Your job is to carefully answer student queries using the provided lecture or course material as the main source of truth. 
+        # Always ground your answers in the given context. If the context does not contain enough information, explicitly say so and avoid making things up. 
+        # Provide the answer only without prefixing it with statements such as "Based on the provided context" or "According to the lecture" or "Based on the provided transcript" etc.
         
 
-        When answering:
-        - Be clear, concise, and accurate. 
-        - Use a structured explanation with definitions, step-by-step reasoning, and examples if applicable. 
-        - Highlight key concepts or formulas from the context that directly support the answer. 
-        - If the question is broad or open-ended, provide a summary first and then expand into details. 
-        - If multiple interpretations are possible, explain them and clarify based on context.
+        # When answering:
+        # - Be clear, concise, and accurate. 
+        # - Use a structured explanation with definitions, step-by-step reasoning, and examples if applicable. 
+        # - Highlight key concepts or formulas from the context that directly support the answer. 
+        # - If the question is broad or open-ended, provide a summary first and then expand into details. 
+        # - If multiple interpretations are possible, explain them and clarify based on context.
+        # """
+        
+        # # Generate answer using LLM
+        # prompt = f"Use the provided context to answer the question: {query}\n\nContext:\n{clean_context}\n\nAnswer:"
+
+        system_prompt = f"""
+        You are a fair and rigorous teaching assistant grader.
+        Your job is to evaluate a student's answer to a professor's question using the provided lecture/course material as the main source of truth.
+        Always ground your evaluation strictly in the given context. If the context does not contain enough information to verify a claim, say so and grade conservatively. Avoid making things up.
+
+        When evaluating:
+        - Focus on correctness, completeness, and alignment with the provided context.
+        - Reward precise use of terms, key concepts, and relevant steps from the context.
+        - Note any unsupported claims or contradictions with the context.
+        - Keep your feedback concise and constructive.
+        - Output only the requested fields and nothing else.
         """
         
-        # Generate answer using LLM
-        prompt = f"Use the provided context to answer the question: {query}\n\nContext:\n{clean_context}\n\nAnswer:"
+        # Generate evaluation using LLM
+        prompt = (
+            "Using ONLY the provided context (lecture materials), evaluate the student's answer to the professor's question.\n"
+            "Provide: (1) a numeric rating from 1 to 5, (2) a short 1–3 sentence review.\n"
+            "Be concise and avoid extra preambles.\n\n"
+            f"Context:\n{clean_context}\n\n"
+            "Input:\n"
+            "The input may contain both the question and the student's answer in any format.\n"
+            "If possible, treat lines starting with 'Question:' and 'Student Answer:' accordingly.\n\n"
+            f"Question and Student Answer:\n{query}\n\n"
+            "Return output in EXACTLY this format (no extra text):\n"
+            "Rating: <1-5>\n"
+            "Review: <short review>"
+        )
         
         try:
             response = chat(
@@ -245,3 +273,4 @@ class RAGService:
             print("\n✅ Database is up to date!")
         
         print("======================\n") 
+        
